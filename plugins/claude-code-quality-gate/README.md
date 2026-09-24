@@ -11,7 +11,7 @@ A complete quality automation system using Claude Code Hooks and Subagents to en
 1. Install from GitHub (recommended):
    ```
    /plugin marketplace add takahirom/takahirom-claude-code-marketplace
-   /plugin install takahirom-claude-code-marketplace@claude-code-quality-gate
+   /plugin install claude-code-quality-gate@takahirom-claude-code-marketplace
    ```
 
 2. Ensure dependencies are installed:
