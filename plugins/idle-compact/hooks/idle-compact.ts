@@ -56,8 +56,10 @@ async function arm($: EngineInterface, state: State) {
   if (state.generation !== generation) return
   const timer = $.clock.after(IDLE_MS, () => void fire($, state, generation))
   state.armed = { generation, timer, sessionId, armedAt }
-  await log($, `armed at ${new Date(armedAt).toISOString()}`)
+  // Issued before any further await, so it never announces a timer a turn has
+  // just cancelled.
   await notice($, `compacts at ${clockTime(armedAt + IDLE_MS)} if nothing happens before then`)
+  await log($, `armed at ${new Date(armedAt).toISOString()}`)
 }
 
 async function fire($: EngineInterface, state: State, generation: number) {
