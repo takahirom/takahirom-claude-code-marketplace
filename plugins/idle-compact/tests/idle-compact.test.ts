@@ -265,3 +265,19 @@ test('never more than one pending timer, none after session.end', async ($, on) 
   await $.session.end({ reason: 'clear', sessionId: 'session-a', resume: { id: 'session-a' } })
   expect(c.live).toBe(0)
 })
+
+test('each arm shows one transcript notice with the local compaction time, nothing else reaches it', async ($, on) => {
+  const clock = mock.clock(on, { now: T0 })
+  world(on)
+  const transcript: string[] = []
+  on('ui.log', ($, e) => {
+    if (e.to === 'transcript') transcript.push(e.text)
+    return {}
+  })
+  const at = new Date(T0 + 50 * MIN)
+  const hhmm = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`
+  await mainTurn($)
+  expect(transcript).toEqual([`compacts at ${hhmm} if nothing happens before then`])
+  await clock.advance(50 * MIN)
+  expect(transcript.length).toBe(1)
+})
