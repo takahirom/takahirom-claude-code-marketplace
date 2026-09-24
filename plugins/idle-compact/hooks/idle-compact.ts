@@ -61,9 +61,10 @@ async function fire($: EngineInterface, state: State, generation: number) {
       await log($, `fired after ${minutes} min: session changed, skipped`)
       return
     }
+    await log($, `fired after ${minutes} min: compacting`)
+    // Checked after the last await: a turn may have started in the meantime.
     if (state.generation !== generation) return
     state.isCompacting = true
-    await log($, `fired after ${minutes} min: compacting`)
     await $.session.compact()
     await log($, 'compaction finished')
   } catch (error) {

@@ -7,7 +7,7 @@ const T0 = 1_700_000_000_000
 
 const SUMMARY = [{ role: 'user' as const, text: 'summary', toolUses: [] }]
 
-type World = { compacts: number; sessionId: string; onCompact?: () => unknown }
+type World = { compacts: number; sessionId: string; onCompact?: () => unknown; onSessionId?: () => unknown }
 
 // The engine beneath the plugin: every event it raises or calls answered here.
 function world(on: On): World {
@@ -15,7 +15,10 @@ function world(on: On): World {
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
   on('turn.complete', () => ({ text: '' }))
   on('session.end', ($, e) => ({ sessionId: e.sessionId }))
-  on('session.id', () => ({ value: w.sessionId }))
+  on('session.id', async () => {
+    await w.onSessionId?.()
+    return { value: w.sessionId }
+  })
   on('session.compact', async () => {
     w.compacts++
     await w.onCompact?.()
@@ -147,6 +150,26 @@ describe('idle compact', () => {
     await $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: `turn-${turns}`, reason: 'answer' })
     await clock.advance(5 * 60 * MIN)
     expect(w.compacts).toBe(1)
+  })
+
+  test('a turn starting while the fire callback is under way does not compact', async ($, on) => {
+    const clock = mock.clock(on, { now: T0 })
+    const w = world(on)
+    // Hold the session id lookup of the fire callback until the person's turn
+    // has started (the arm's lookup comes first).
+    let release = () => {}
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    let lookups = 0
+    w.onSessionId = async () => {
+      if (++lookups === 2) await gate
+    }
+    await mainTurn($)
+    await clock.advance(50 * MIN)
+    expect(lookups).toBe(2)
+    await $.turn.start({ text: 'back', turnId: 'late-turn' })
+    release()
+    await clock.settle()
+    expect(w.compacts).toBe(0)
   })
 
   test("the person's /compact cancels the pending timer", async ($, on) => {
