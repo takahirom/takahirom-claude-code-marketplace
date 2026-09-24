@@ -1,5 +1,5 @@
 {
     "name": "idle-compact",
     "description": "Compact once after 50 idle minutes, while the 1h prompt cache is still warm.",
-    "version": "1.0.0"
+    "version": "1.0.1"
 }

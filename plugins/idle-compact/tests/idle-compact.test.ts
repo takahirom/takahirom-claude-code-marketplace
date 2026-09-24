@@ -265,3 +265,34 @@ test('never more than one pending timer, none after session.end', async ($, on) 
   await $.session.end({ reason: 'clear', sessionId: 'session-a', resume: { id: 'session-a' } })
   expect(c.live).toBe(0)
 })
+
+test('each arm shows one transcript notice with the local compaction time, nothing else reaches it', async ($, on) => {
+  const clock = mock.clock(on, { now: T0 })
+  world(on)
+  const transcript: string[] = []
+  on('ui.log', ($, e) => {
+    if (e.to === 'transcript') transcript.push(e.text)
+    return { value: undefined }
+  })
+  const at = new Date(T0 + 50 * MIN)
+  const hhmm = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`
+  await mainTurn($)
+  expect(transcript).toEqual([`compacts at ${hhmm} if nothing happens before then`])
+  await clock.advance(50 * MIN)
+  expect(transcript.length).toBe(1)
+})
+
+// The harness's $.ui.log does not wait for its hooks, so a turn cannot be made
+// to start mid-arm; pin the order instead: the notice goes out in the same step
+// as the generation check, before the arm awaits anything else.
+test('the transcript notice is issued before the debug log', async ($, on) => {
+  mock.clock(on, { now: T0 })
+  world(on)
+  const logs: string[] = []
+  on('ui.log', ($, e) => {
+    logs.push(e.to === 'transcript' ? 'notice' : e.text.split(' ').slice(0, 3).join(' '))
+    return { value: undefined }
+  })
+  await mainTurn($)
+  expect(logs).toEqual(['notice', 'idle-compact: armed at'])
+})

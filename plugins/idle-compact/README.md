@@ -30,6 +30,7 @@ flowchart TD
 - Only the main conversation arms the timer. Subagent completions (`agentId`), aborted or failed turns, and completions without a matching `turn.start` are ignored.
 - The timer callback checks the wall clock (`$.clock.now()`) again. A timer that runs late, for example after the Mac slept, does nothing once 58 minutes have passed, because by then the cache may already be cold.
 - The wall-clock anchor is the time `turn.complete` fired. Claude Code does not expose the cache's own last-activity time or TTL to plugins, so a session on the 5m TTL is not detected.
+- Each time the timer is armed, one line in the conversation says when the compaction will happen, for example `idle-compact: compacts at 15:03 if nothing happens before then`. It is kept in the transcript but never sent to the model. Everything else goes to the debug log only (`--debug` / `--debug-file`).
 - A failed compaction, one refused because a turn is running or because `DISABLE_COMPACT` is set, is ignored silently and not retried.
 
 ## Development

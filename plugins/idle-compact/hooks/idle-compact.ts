@@ -29,6 +29,19 @@ async function log($: EngineInterface, text: string) {
   } catch {}
 }
 
+// Shown in the conversation and kept in the transcript, never sent to the model.
+async function notice($: EngineInterface, text: string) {
+  try {
+    await $.ui.log(text, { to: 'transcript' })
+  } catch {}
+}
+
+// Local wall-clock time, HH:MM.
+function clockTime(ms: number) {
+  const d = new Date(ms)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
 function cancel(state: State) {
   state.generation++
   state.armed?.timer.cancel()
@@ -43,6 +56,9 @@ async function arm($: EngineInterface, state: State) {
   if (state.generation !== generation) return
   const timer = $.clock.after(IDLE_MS, () => void fire($, state, generation))
   state.armed = { generation, timer, sessionId, armedAt }
+  // Issued before any further await, so it never announces a timer a turn has
+  // just cancelled.
+  await notice($, `compacts at ${clockTime(armedAt + IDLE_MS)} if nothing happens before then`)
   await log($, `armed at ${new Date(armedAt).toISOString()}`)
 }
 
