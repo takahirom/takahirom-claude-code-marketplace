@@ -42,6 +42,29 @@ function clockTime(ms: number) {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
+type CompactUsage = {
+  input_tokens?: number
+  output_tokens?: number
+  cache_read_input_tokens?: number
+  cache_creation_input_tokens?: number
+}
+
+// How much of the summary call's input came from the prompt cache. The host
+// leaves `usage` out when it has none (all zero, or a precomputed summary).
+export function cacheHitLine(result: unknown): string | null {
+  const usage = (result as { usage?: CompactUsage } | undefined)?.usage
+  if (usage === undefined) return null
+  const read = usage.cache_read_input_tokens ?? 0
+  const written = usage.cache_creation_input_tokens ?? 0
+  const uncached = usage.input_tokens ?? 0
+  const total = read + written + uncached
+  if (total === 0) return null
+  const n = (x: number) => x.toLocaleString('en-US')
+  // Integer math: (29 / 50) * 100 is 57.99..., which would floor to 57.
+  const percent = Math.floor((read * 100) / total)
+  return `compacted with a ${percent}% cache hit (${n(read)} read, ${n(written)} written, ${n(uncached)} uncached)`
+}
+
 function cancel(state: State) {
   state.generation++
   state.armed?.timer.cancel()
@@ -81,8 +104,10 @@ async function fire($: EngineInterface, state: State, generation: number) {
     // Checked after the last await: a turn may have started in the meantime.
     if (state.generation !== generation) return
     state.isCompacting = true
-    await $.session.compact()
+    const result = await $.session.compact()
     await log($, 'compaction finished')
+    const line = cacheHitLine(result)
+    if (line !== null) await notice($, line)
   } catch (error) {
     // A running turn, DISABLE_COMPACT or a headless host: no retry, by design.
     await log($, `compaction failed: ${error instanceof Error ? error.message : String(error)}`)
