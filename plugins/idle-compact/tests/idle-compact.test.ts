@@ -7,7 +7,13 @@ const T0 = 1_700_000_000_000
 
 const SUMMARY = [{ role: 'user' as const, text: 'summary', toolUses: [] }]
 
-type World = { compacts: number; sessionId: string; onCompact?: () => unknown; onSessionId?: () => unknown }
+type World = {
+  compacts: number
+  sessionId: string
+  usage?: Record<string, number>
+  onCompact?: () => unknown
+  onSessionId?: () => unknown
+}
 
 // The engine beneath the plugin: every event it raises or calls answered here.
 function world(on: On): World {
@@ -22,7 +28,7 @@ function world(on: On): World {
   on('session.compact', async () => {
     w.compacts++
     await w.onCompact?.()
-    return { messages: SUMMARY }
+    return w.usage === undefined ? { messages: SUMMARY } : { messages: SUMMARY, usage: w.usage }
   })
   return w
 }
@@ -295,4 +301,44 @@ test('the transcript notice is issued before the debug log', async ($, on) => {
   })
   await mainTurn($)
   expect(logs).toEqual(['notice', 'idle-compact: armed at'])
+})
+
+function transcriptOf(on: On) {
+  const transcript: string[] = []
+  on('ui.log', ($, e) => {
+    if (e.to === 'transcript') transcript.push(e.text)
+    return { value: undefined }
+  })
+  return transcript
+}
+
+test('after the idle compaction, one transcript line gives the cache hit of the summary call', async ($, on) => {
+  const clock = mock.clock(on, { now: T0 })
+  const w = world(on)
+  w.usage = { input_tokens: 2813, output_tokens: 2058, cache_read_input_tokens: 74482, cache_creation_input_tokens: 326 }
+  const transcript = transcriptOf(on)
+  await mainTurn($)
+  await clock.advance(50 * MIN)
+  expect(w.compacts).toBe(1)
+  expect(transcript.slice(1)).toEqual(['compacted with a 95% cache hit (74,482 read, 326 written, 2,813 uncached)'])
+})
+
+test('no cache hit line when the compaction reports no usage', async ($, on) => {
+  const clock = mock.clock(on, { now: T0 })
+  const w = world(on)
+  const transcript = transcriptOf(on)
+  await mainTurn($)
+  await clock.advance(50 * MIN)
+  expect(w.compacts).toBe(1)
+  expect(transcript.length).toBe(1)
+})
+
+test('an exact cache hit percentage is not understated by float rounding', async ($, on) => {
+  const clock = mock.clock(on, { now: T0 })
+  const w = world(on)
+  w.usage = { input_tokens: 0, output_tokens: 1, cache_read_input_tokens: 29, cache_creation_input_tokens: 21 }
+  const transcript = transcriptOf(on)
+  await mainTurn($)
+  await clock.advance(50 * MIN)
+  expect(transcript.slice(1)).toEqual(['compacted with a 58% cache hit (29 read, 21 written, 0 uncached)'])
 })
