@@ -36,14 +36,14 @@ flowchart TD
 
 ## Why It Never Compacts Twice
 
-"Once" means once per idle stretch: another compaction needs you to come back, finish a turn, and leave the session idle for another 50 minutes.
+It compacts at most once each time you leave the session alone. For another one, you have to come back, finish a turn, and then leave it for 50 more minutes.
 
-- The timer is armed only by a main `turn.complete` that matches the last `turn.start`. The matched turn id is then cleared, so a duplicate completion arms nothing. While the idle compaction runs (`isCompacting`), any completion it raises is ignored, so the compaction cannot re-arm the timer.
-- There is at most one timer. Each arm cancels the previous one, and a generation counter makes a callback from a cancelled timer do nothing, even one that has already started.
-- A timer clears itself before it compacts, so the same timer cannot fire twice. A failed compaction is not retried.
-- Your own `/compact`, or an automatic one, cancels the pending timer: it would only compact the fresh summary again.
+- Only a turn you finish starts the timer. The compaction is not your turn, so it never starts a new one.
+- There is only ever one timer. Finishing another turn replaces it, and a replaced timer does nothing, even if it was just about to fire.
+- A timer is used up when it fires, whether the compaction works or fails. Nothing retries it.
+- If you run `/compact` yourself, or Claude Code compacts automatically, the timer is cancelled.
 
-Each of these has a test in `tests/idle-compact.test.ts`, for example "the compaction itself never re-arms the timer" and "never more than one pending timer, none after session.end".
+Each of these has a test in `tests/idle-compact.test.ts`.
 
 ## Development
 
