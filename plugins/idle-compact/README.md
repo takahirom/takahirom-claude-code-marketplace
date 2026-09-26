@@ -34,16 +34,16 @@ flowchart TD
 - Each time the timer is armed, one line in the conversation says when the compaction will happen, for example `idle-compact: compacts at 15:03 if nothing happens before then`. It is kept in the transcript but never sent to the model. After the idle compaction, one more line gives how much of the summary call's input came from the prompt cache, for example `idle-compact: compacted with a 95% cache hit (74,482 read, 326 written, 2,813 uncached)`; it is left out when Claude Code reports no usage for the compaction. Everything else goes to the debug log only (`--debug` / `--debug-file`).
 - A failed compaction, one refused because a turn is running or because `DISABLE_COMPACT` is set, is ignored silently and not retried.
 
-## Why It Never Compacts Twice
+## How It Avoids Compacting Twice
 
-It compacts at most once each time you leave the session alone. For another one, you have to come back, finish a turn, and then leave it for 50 more minutes.
+The plugin holds at most one timer, and only the end of a turn you sent starts it.
 
-- Only a turn you finish starts the timer. The compaction is not your turn, so it never starts a new one.
-- There is only ever one timer. Finishing another turn replaces it, and a replaced timer does nothing, even if it was just about to fire.
-- A timer is used up when it fires, whether the compaction works or fails. Nothing retries it.
-- If you run `/compact` yourself, or Claude Code compacts automatically, the timer is cancelled.
+1. You finish a turn: a 50-minute timer starts, replacing any earlier one.
+2. You send another message: the timer is cancelled.
+3. 50 minutes pass with nothing: the timer fires once, compacts, and is gone.
+4. The compaction is not a turn you sent, so no new timer starts. Nothing is scheduled until you send something again.
 
-Each of these has a test in `tests/idle-compact.test.ts`.
+A failed compaction is not retried, and running `/compact` yourself cancels the timer.
 
 ## Development
 
