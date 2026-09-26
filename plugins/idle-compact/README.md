@@ -34,6 +34,17 @@ flowchart TD
 - Each time the timer is armed, one line in the conversation says when the compaction will happen, for example `idle-compact: compacts at 15:03 if nothing happens before then`. It is kept in the transcript but never sent to the model. After the idle compaction, one more line gives how much of the summary call's input came from the prompt cache, for example `idle-compact: compacted with a 95% cache hit (74,482 read, 326 written, 2,813 uncached)`; it is left out when Claude Code reports no usage for the compaction. Everything else goes to the debug log only (`--debug` / `--debug-file`).
 - A failed compaction, one refused because a turn is running or because `DISABLE_COMPACT` is set, is ignored silently and not retried.
 
+## How It Avoids Compacting Twice
+
+The plugin holds at most one timer, and only the end of a turn you sent starts it.
+
+1. You finish a turn: a 50-minute timer starts, replacing any earlier one.
+2. You send another message: the timer is cancelled.
+3. 50 minutes pass with nothing: the timer fires once, compacts, and is gone.
+4. The compaction is not a turn you sent, so no new timer starts. Nothing is scheduled until you send something again.
+
+A failed compaction is not retried, and running `/compact` yourself cancels the timer.
+
 ## Development
 
 ```sh
